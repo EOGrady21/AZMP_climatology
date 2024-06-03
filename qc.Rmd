@@ -1,0 +1,627 @@
+---
+title: "Climatology Quality Control"
+output: html_notebook
+---
+
+```{r setup}
+library(librarian)
+shelf(tidyverse, ggplot2, ocedata, sf, units, R.matlab)
+
+```
+QC procedures following Gordana Lazin's methodology for climatology data
+
+# Filter data 
+
+Filter by existing quality control flags, selecting flags in c(0, 1, 2, 3, 6).
+
+Filter by distance from coastline, excluding data points within 5km of the coast
+(using Dan Kelley's ocedata, coastlineWorldFine object)
+
+Filter data to reduce QC issues requiring attention.
+
+```{r filter-coast}
+
+data(coastlineWorldFine)
+  clwf <- as.data.frame(coastlineWorldFine@data)
+  #filter coastline to SS area
+  clwf <- clwf %>%
+    filter(longitude > -71 & longitude < -48) %>%
+    filter(latitude > 37 & latitude < 48)
+
+  fullcoast <- as.data.frame(coastlineWorldFine@data)
+  remove(coastlineWorldFine)
+
+
+
+  # Convert your dataframe to a spatial object
+df_sf <- st_as_sf(clwf, coords = c("longitude", "latitude"), crs = 4326)
+
+coastline <- st_transform(df_sf, crs = 32620) 
+
+# Create buffer around coastline
+buffer <- st_buffer(coastline, dist = 5000) # 5km buffer
+
+onebuff <- st_union(buffer)
+
+data_fns <- list.files('data/extractions/', pattern = '.csv', full.names = TRUE)
+
+for (l in 1:length(data_fns)) {
+  
+  data <- read.csv(data_fns[l])
+  param_name <- unique(data$PARAMETER_NAME)
+  cat(param_name, '\n')
+  # filter based on QC codes
+  
+  data_f <- data %>%
+    filter(DATA_QC_CODE %in% c(0, 1, 2, 3, 6))
+ cat(nrow(data) - nrow(data_f))
+ cat(' points removed based on data flag! \n')
+  # filter on spatial
+  # 5 km from coast
+
+  data_l <- data_f %>%
+  select(NAME, EVENT_MIN_LON, EVENT_MIN_LAT, COLLECTOR_EVENT_ID, COLLECTOR_SAMPLE_ID)
+
+# Convert data frames to simple feature objects
+points <- st_as_sf(data_l, coords = c("EVENT_MIN_LON", "EVENT_MIN_LAT"), crs = 4326)
+
+
+#line.sf <- st_sf(id = 'L1', st_sfc(st_linestring(as.matrix(clwf), dim = "XY")))
+#st_crs(line.sf) <- st_crs(4326) # assign crs
+
+# EPSG:32620 
+points <- st_transform(points, 32620)
+#coastline <- st_transform(line.sf, crs = 32620) 
+
+# Perform spatial join
+intersects <- st_intersects(points, onebuff, sparse = FALSE)
+
+# Filter points
+selected_points <- points[!intersects, ]
+
+# Calculate distance from each point to the coastline
+#distances <- st_distance(points, coastline)
+
+# Select points within 5km of the coastline
+#selected_points <- points[distances <= units::set_units(5000, 'meters'), ]
+
+# cat(length(which(data_f$COLLECTOR_SAMPLE_ID %in% selected_points$COLLECTOR_SAMPLE_ID)))
+# cat(' points retained from coastline filtering!\n')
+cat(length(intersects[intersects == TRUE]))
+cat(' points filtered by coastal position! \n')
+
+data_f2 <- data_f[which(data_f$COLLECTOR_SAMPLE_ID %in% selected_points$COLLECTOR_SAMPLE_ID),]
+
+# plot
+
+coast_data <- data_f[-which(data_f$COLLECTOR_SAMPLE_ID %in% selected_points$COLLECTOR_SAMPLE_ID),]
+
+pp <- ggplot() +
+  geom_polygon(data = fullcoast, aes(x = longitude, y = latitude), colour = 'grey')+
+  geom_point(data = coast_data, aes(x = EVENT_MIN_LON, y = EVENT_MIN_LAT), colour = 'red')+
+  geom_point(data = data_f2, aes(x = EVENT_MIN_LON, y = EVENT_MIN_LAT), colour = 'grey')+
+  scale_x_continuous(limits = c(-71, -48), expand = c(0,0))+
+    scale_y_continuous(limits = c(37, 48), expand = c(0,0)) 
+
+print(pp)
+
+# save filtered dataset
+
+ write.csv(data_f2, paste0('data/filtered_data/SS_', param_name, '_', Sys.Date(), '.csv'))
+ }
+
+```
+
+Filter data to be contained within climatology boxes.
+
+```{r filter-box}
+
+# load in climatology boxes
+boxdat <- read.csv("Gordana/2014_boxes.csv")
+
+# Convert your dataframe to a spatial object
+df_sf <- st_as_sf(boxdat, coords = c("longitude", "latitude"), crs = 4326)
+
+# Create polygons
+# Assuming each box consists of 4 points in order
+df_poly <- df_sf %>%
+  group_by(box) %>%
+  summarise(geometry = st_combine(geometry), do_union = FALSE) %>%
+  st_cast("POLYGON")
+
+data_fns <- list.files('data/filtered_data/', pattern = '.csv', full.names = TRUE)
+
+for (l in 1:length(data_fns)) {
+  
+  data <- read.csv(data_fns[l])
+  param_name <- unique(data$PARAMETER_NAME)
+  cat(param_name, '\n')
+# use event location info because it is never 0
+data_l <- data %>%
+  select(NAME, EVENT_MIN_LAT, EVENT_MIN_LON, COLLECTOR_EVENT_ID, COLLECTOR_SAMPLE_ID)
+
+df_l_sf <- st_as_sf(data_l, coords = c("EVENT_MIN_LON", "EVENT_MIN_LAT"), crs = 4326)
+
+# Check if points  are within the boxes
+within_boxes <- st_within(df_l_sf, df_poly)
+
+outboxdata <- data[unlist(lapply(within_boxes, length)) == 0, ]
+# Remove points not within any box from df_large
+data_boxed <- data[unlist(lapply(within_boxes, length)) > 0, ]
+
+cat(nrow(data) - nrow(data_boxed), 'points removed outside of climatology boxes! \n')
+
+pp <- ggplot() +
+  geom_polygon(data = fullcoast, aes(x = longitude, y = latitude), colour = 'grey')+
+  geom_point(data = outboxdata, aes(x = EVENT_MIN_LON, y = EVENT_MIN_LAT), colour = 'red')+
+  geom_point(data = data_boxed, aes(x = EVENT_MIN_LON, y = EVENT_MIN_LAT), colour = 'grey')+
+  scale_x_continuous(limits = c(-71, -48), expand = c(0,0))+
+    scale_y_continuous(limits = c(37, 48), expand = c(0,0)) 
+
+print(pp)
+
+write.csv(data_boxed, paste0('data/filtered_data/SS_boxed_', param_name, '_', Sys.Date(), '.csv'))
+}
+
+```
+
+1. Check methodology
+  All methods are comparable.
+  
+2. Check units
+  All units match in initial_summary.Rmd
+
+3. Check for empty fields in lat, lon, depth, data value
+
+```{r check-position}
+data_fns <- list.files('data/filtered_data/', pattern = '.csv', full.names = TRUE)
+
+for (i in 1:length(data_fns)) {
+  
+  data <- read.csv(data_fns[i])
+  
+  param_name <- unique(data$PARAMETER_NAME)
+  cat(param_name, '\n')
+  
+  # EVENT LAT/LON
+  if (length(which(data$EVENT_MIN_LAT == 0)) != 0) {
+    cat("Zeros present in EVENT_MIN_LAT. \n")
+  }
+  if (anyNA(data$EVENT_MIN_LAT) == TRUE) {
+    cat("NA values in EVENT_MIN_LAT. \n ")
+  }
+  if (length(which(data$EVENT_MAX_LAT == 0)) != 0) {
+    cat("Zeros present in EVENT_MAX_LAT. \n")
+  }
+  if (anyNA(data$EVENT_MAX_LAT) == TRUE) {
+    cat("NA values in EVENT_MAX_LAT. \n")
+  }
+  if (length(which(data$EVENT_MIN_LON == 0)) != 0) {
+    cat("Zeros present in EVENT_MIN_LON. \n")
+  }
+  if (anyNA(data$EVENT_MIN_LON) == TRUE) {
+    cat("NA values in EVENT_MIN_LON. \n")
+  }
+  if (length(which(data$EVENT_MAX_LON == 0)) != 0) {
+    cat("Zeros present in EVENT_MAX_LON. \n")
+  }
+  if (anyNA(data$EVENT_MAX_LON) == TRUE) {
+    cat("NA values in EVENT_MAX_LON. \n")
+  }
+  
+  # HEADER LAT/LON
+  
+  if (length(which(data$HEADER_START_LAT == 0)) != 0) {
+    cat("Zeros present in HEADER_START_LAT. \n")
+  }
+  if (anyNA(data$HEADER_START_LAT) == TRUE) {
+    cat("NA values in HEADER_START_LAT. \n")
+  }
+  if (length(which(data$HEADER_END_LAT == 0)) != 0) {
+    cat("Zeros present in HEADER_END_LAT. \n")
+  }
+  if (anyNA(data$HEADER_END_LAT) == TRUE) {
+    cat("NA values in HEADER_END_LAT. \n")
+  }
+  if (length(which(data$HEADER_START_LON == 0)) != 0) {
+    cat("Zeros present in HEADER_START_LON. \n")
+  }
+  if (anyNA(data$HEADER_START_LON) == TRUE) {
+    cat("NA values in HEADER_START_LON. \n")
+  }
+  if (length(which(data$HEADER_END_LON == 0)) != 0) {
+    cat("Zeros present in HEADER_END_LON. \n")
+  }
+  if (anyNA(data$HEADER_END_LON) == TRUE) {
+    cat("NA values in HEADER_END_LON. \n")
+  }
+  
+  cat("Missions with HEADER Position 0s: \n")
+  cat(str_c(unique(data$NAME[which(data$HEADER_END_LON == 0)]), collapse = '\n'), '\n')
+  
+  cat("Missions with HEADER Position NAs:")
+  cat(str_c(unique(data$NAME[which(is.na(data$HEADER_END_LON))]), collapse = '\n'), '\n')
+  
+  # DEPTH
+  
+  if (anyNA(data$HEADER_START_DEPTH) == TRUE) {
+    cat("NA values in HEADER_START_DEPTH. \n")
+  }
+  dd <- data$HEADER_START_DEPTH - data$HEADER_END_DEPTH
+  if (length(which(dd > 0)) != 0){
+    cat('Differences detected between start and end depths. \n')
+  }
+  
+  # DATA_VALUE
+  
+  if (anyNA(data$DATA_VALUE) == TRUE) {
+    cat('NA data values detected. \n')
+  }
+  
+  if (length(which(is.null(data$DATA_VALUE))) != 0) {
+    cat("NULL values detected. \n")
+  }
+  cat("\n \n")
+}
+
+```
+
+4. Check if start and end positions are the same 
+
+```{r check-position2}
+
+data_fns <- list.files('data/filtered_data/', pattern = '.csv', full.names = TRUE)
+
+for (i in 1:length(data_fns)) {
+  
+  data <- read.csv(data_fns[i])
+  
+  param_name <- unique(data$PARAMETER_NAME)
+  cat(param_name, '\n')
+  
+  hdlat <- na.omit(as.numeric(data$HEADER_START_LAT) - as.numeric(data$HEADER_END_LAT))
+  
+  if (length(which(hdlat > 0)) != 0) {
+    cat("Difference between header start and end latitude detected. \n")
+    cat(paste("Difference Range: ", str_c(range(hdlat), collapse = ' - ')), '\n')
+  }
+  
+  hdlon <- na.omit(as.numeric(data$HEADER_START_LON) - as.numeric(data$HEADER_END_LON))
+  
+  if (length(which(hdlon > 0)) != 0) {
+    cat("Difference between header start and end longitude detected. \n")
+    cat(paste("Difference Range: ", str_c(range(hdlon), collapse = ' - ')), '\n')
+  }
+  cat("\n \n")
+}
+
+```
+
+5. Check for negative depths
+
+```{r check-depths}
+data_fns <- list.files('data/filtered_data/', pattern = '.csv', full.names = TRUE)
+
+for (i in 1:length(data_fns)) {
+  
+  data <- read.csv(data_fns[i])
+  
+  param_name <- unique(data$PARAMETER_NAME)
+  cat(param_name, '\n')
+  
+  if(min(data$HEADER_START_DEPTH, na.rm = TRUE) < 0) {
+    cat('Negative depth values found in: \n')
+    cat(unique(data$NAME[which(data$HEADER_START_DEPTH < 0)]))
+  }
+}
+
+```
+
+6. Check dates
+
+```{r check-dates}
+data_fns <- list.files('data/filtered_data/', pattern = '.csv', full.names = TRUE)
+
+for (i in 1:length(data_fns)) {
+  
+  data <- read.csv(data_fns[i])
+  
+  param_name <- unique(data$PARAMETER_NAME)
+  cat(param_name, '\n')
+  cat('Date range: ')
+  cat(as.character(min(as.Date(data$HEADER_START, '%d-%b-%y'))))
+  cat(' to ')
+  cat(as.character(max(as.Date(data$HEADER_START, '%d-%b-%y'))))
+  cat('\n')
+}
+
+```
+
+7. Check position, time and data QC codes
+
+```{r check-time-date-qc}
+data_fns <- list.files('data/filtered_data/', pattern = '.csv', full.names = TRUE)
+
+for (i in 1:length(data_fns)) {
+  
+  data <- read.csv(data_fns[i])
+  
+  param_name <- unique(data$PARAMETER_NAME)
+  cat(param_name, '\n')
+  cat("Time Quality: \n")
+  cat(str_c(unique(data$TIME_QUALITY), collapse = '\n'))
+  cat("\n \n")
+}
+
+```
+
+8. Check values against IML test 2.1 and test 2.2
+
+```{r check-global-regional-ranges}
+data_fns <- list.files('data/filtered_data/', pattern = '.csv', full.names = TRUE)
+test_21 <- readxl::read_xlsx("C:/users/ogradye/Documents/local_QC/extdata/qc_test_values.xlsx", 
+                                      sheet = 1)
+test_22 <- readxl::read_xlsx("C:/users/ogradye/Documents/local_QC/extdata/qc_test_values.xlsx", 
+                                      sheet = 2)
+
+for (i in 1:length(data_fns)) {
+  
+  data <- read.csv(data_fns[i])
+  
+  param_name <- unique(data$PARAMETER_NAME)
+  if (param_name == 'Chlorophyll A') {
+    param_name <- 'Chlorophyll'
+  }
+  if (param_name == 'Nitrate') {
+    param_name <- 'Nitrate+Nitrite'
+  }
+  if (param_name == 'O2') {
+    param_name <- 'Dissolved oxygen'
+  }
+  cat(param_name, '\n')
+  
+  # grab AZMP columns
+  col_ind <- grep(names(test_21), pattern = 'AZMP')
+  # check test 2.1 values
+  if (!param_name %in% test_21$Variable){
+    cat("Skipped: Variable not found in Test 2.1! ")
+  } else{
+    test_vals <- test_21 %>%
+      select(c('Variable', all_of(col_ind))) %>%
+      filter(Variable == param_name)
+    
+    min_col <- grep(names(test_vals), pattern = 'min', ignore.case = TRUE)
+    max_col <- grep(names(test_vals), pattern = 'max', ignore.case = TRUE)
+    
+    if (is.na(test_vals[[min_col]]) | test_vals[[min_col]] == 'NA') {
+      cat("Skipped: No global limits set! \n")
+    } else{
+    flag_data <- data %>%
+      filter(DATA_VALUE < as.numeric(test_vals[[min_col]]) | 
+               DATA_VALUE > as.numeric(test_vals[[max_col]]))
+    
+    if (nrow(flag_data) > 0) {
+      cat(nrow(flag_data), " points removed outside global range! \n")
+    }
+    
+    if (nrow(flag_data) > 0) {
+          data <- data[-which(data$X %in% flag_data$X),] 
+      } 
+    }
+  }
+  
+  # Check Test 2.2 variables
+    col_ind <- grep(names(test_22), pattern = 'AZMP')
+
+  if (!param_name %in% test_22$Variable){
+    cat("Skipped: Variable not found in Test 2.2! ")
+  } else{
+    test_vals <- test_22 %>%
+      select(c('Variable', all_of(col_ind))) %>%
+      filter(Variable == param_name)
+    
+    min_col <- grep(names(test_vals), pattern = 'min', ignore.case = TRUE)
+    max_col <- grep(names(test_vals), pattern = 'max', ignore.case = TRUE)
+    
+    if (is.na(test_vals[[min_col]])| test_vals[[min_col]] == 'NA') {
+      cat("Skipped: No regional limits set! \n")
+    } else{
+    flag_data <- data %>%
+      filter(DATA_VALUE < as.numeric(test_vals[[min_col]]) | 
+               DATA_VALUE > as.numeric(test_vals[[max_col]]))
+    
+    if (nrow(flag_data) > 0) {
+      cat(nrow(flag_data), " points removed outside regional range! \n")
+    }
+    
+     if (nrow(flag_data) > 0) {
+          data <- data[-which(data$X %in% flag_data$X),] 
+      } 
+    }
+    
+    
+  }
+  
+    
+ param_name <- unique(data$PARAMETER_NAME)
+
+       write.csv(data,
+                 file = paste0('data/filtered_data/SS_', param_name, '_test212_', Sys.Date(), '.csv'), 
+                 row.names = FALSE)
+  
+  cat('\n \n')
+
+}
+```
+9. Check against IML Test 2.4 (profile envelope)
+
+```{r check-profile-range}
+data_fns <- list.files('data/filtered_data/', pattern = '.csv', full.names = TRUE)
+test_24 <- readxl::read_xlsx("C:/users/ogradye/Documents/local_QC/extdata/qc_test_values.xlsx", 
+                                      sheet = 3)
+
+for (i in 1:length(data_fns)) {
+  
+  data <- read.csv(data_fns[i])
+  
+  param_name <- unique(data$PARAMETER_NAME)
+  if (param_name == 'Chlorophyll A') {
+    param_name <- 'Chlorophyll'
+  }
+  if (param_name == 'Phaeophytin') {
+    param_name <- 'Phaeo'
+  }
+  if (param_name == 'O2') {
+    param_name <- 'Oxygen'
+  }
+  cat(param_name, '\n')
+  
+    test_vals <- test_24 %>%
+      filter(Variable == param_name & Program == 'AZMP')
+    if (nrow(test_vals) == 0) {
+      cat("Skipped: No envelope range found! \n")
+    } else{
+      flag_data <- list()
+      for (ii in 1:nrow(test_vals)) {
+      flag_data[[ii]] <- data %>%
+        filter(HEADER_START_DEPTH > test_vals$`Min Depth`[[ii]] &
+                 HEADER_START_DEPTH < test_vals$`Max Depth`[[ii]]) %>%
+        filter(DATA_VALUE < test_vals$`Min Value`[[ii]] |
+                 DATA_VALUE > test_vals$`Max Value`[[ii]])
+      }
+      all_flag_data <- do.call(rbind, flag_data)
+      
+      if (nrow(all_flag_data) > 0) {
+        cat(nrow(all_flag_data), " points outside profile envelope ranges! \n")
+      }
+    }
+
+  
+}
+
+```
+
+Remove points outside of Test 2.4 limits and save new filtered data
+
+```{r exclude-on-profile-ranges}
+data_fns <- list.files('data/filtered_data/', pattern = '.csv', full.names = TRUE)
+
+
+for (i in 1:length(data_fns)) {
+  data <- read.csv(data_fns[i])
+  
+  param_name <- unique(data$PARAMETER_NAME)
+  if (param_name == 'Chlorophyll A') {
+    param_name <- 'Chlorophyll'
+  }
+  if (param_name == 'Phaeophytin') {
+    param_name <- 'Phaeo'
+  }
+  if (param_name == 'O2') {
+    param_name <- 'Oxygen'
+  }
+  cat(param_name, '\n')
+  
+    test_vals <- test_24 %>%
+      filter(Variable == param_name & Program == 'AZMP')
+    if (nrow(test_vals) == 0) {
+      cat("Skipped: No envelope range found! \n")
+      param_name <- unique(data$PARAMETER_NAME)
+
+      t24filter_data <- data %>%
+            select(-X)
+      write.csv(t24filter_data,
+                 file = paste0('data/filtered_data/SS_', param_name, '_test24_', Sys.Date(), '.csv'), 
+                 row.names = FALSE)
+      
+    } else{
+      flag_data <- list()
+      for (ii in 1:nrow(test_vals)) {
+      flag_data[[ii]] <- data %>%
+        filter(HEADER_START_DEPTH > test_vals$`Min Depth`[[ii]] &
+                 HEADER_START_DEPTH < test_vals$`Max Depth`[[ii]]) %>%
+        filter(DATA_VALUE < test_vals$`Min Value`[[ii]] |
+                 DATA_VALUE > test_vals$`Max Value`[[ii]])
+      }
+      all_flag_data <- do.call(rbind, flag_data)
+      
+      if (nrow(all_flag_data) > 0) {
+          t24filter_data <- data[-which(data$X %in% all_flag_data$X),] %>%
+            select(-X)
+          cat(nrow(all_flag_data), ' points removed! \n')
+
+      } else {
+        t24filter_data <- data %>%
+            select(-X)
+      }
+      
+       param_name <- unique(data$PARAMETER_NAME)
+
+       write.csv(t24filter_data,
+                 file = paste0('data/filtered_data/SS_', param_name, '_test24_', Sys.Date(), '.csv'), 
+                 row.names = FALSE)
+
+    }
+  
+  
+}
+
+```
+
+# Manual checks
+
+Manually remove all data from CAR2021221 due to data loading issues (incorrect values were loaded to BioChem - brought to ODIS to be fixed)
+
+```{r exclude-manual}
+data_fns <- list.files('data/filtered_data/', pattern = '.csv', full.names = TRUE)
+
+
+for (i in 1:length(data_fns)) {
+  data <- read.csv(data_fns[i])
+  param_name <- unique(data$PARAMETER_NAME)
+  cat(param_name, '\n')
+  if (length(which(data$NAME == 'CAR2021221') > 0)) {
+    cat(nrow(data[data$NAME == 'CAR2021221',]))
+    cat(' points removed from CAR2021221. \n')
+  data <- data[-which(data$NAME == 'CAR2021221'),]
+  }
+  
+  # remove bbmp2005
+  if (length(which(data$NAME == 'BCD2005667') > 0)) {
+    cat(nrow(data[data$NAME == 'BCD2005667',]))
+    cat(' points removed from BCD2005667 \n')
+  data <- data[-which(data$NAME == 'BCD2005667'),]
+  }
+  
+  # remove HL02 2019 (salinty loaded as silicate)
+  if (param_name == 'Salinity') {
+    cat(nrow(data[data$NAME == 'BCD2019666',]))
+    cat(' points removed from BCD2019666 \n')
+    data <- data[-which(data$NAME == 'BCD2019666'),]
+  }
+  
+  param_name <- unique(data$PARAMETER_NAME)
+  data <- data %>%
+    select(-grep(names(data), pattern = '^X'))
+  
+  
+  write.csv(data,
+                 file = paste0('data/filtered_data/SS_', param_name, '_final_', Sys.Date(), '.csv'), 
+                 row.names = FALSE)
+  
+}
+
+
+```
+
+10. Outlier analysis
+
+TODO
+
+  In generation of BBMP climatology (Reid Steele, 2023), outliers 
+  (outside IQR) were removed from data. 
+  
+  
+```{r}
+
+```

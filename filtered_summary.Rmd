@@ -1,0 +1,125 @@
+---
+title: "Filtered Summary"
+author: "Emily O'Grady"
+date: "2024-05-23"
+output: html_document
+---
+
+```{r setup}
+library(librarian)
+shelf(tidyverse, ggplot2, ocedata)
+```
+This document contains a visual summary of data gathered for the AZMP climatology (2024), after
+being filtered based on QC methods outlined by Gordana Lazin (2014).
+
+Quality Control included filtering values based on methods, proximity to coastline, existing
+quality control flags from BioChem, and profile envelope limits (Test 2.4 of IML QC).
+
+The scope of this data will be visualized and compared to the scope of data used by Lazin et al in the last climatology (2014).
+
+
+```{r}
+
+data_fns <- list.files('data/filtered_data/', pattern = '.csv', full.names = TRUE)
+
+data14 <- data.frame(
+  variable = c("Nitrate", "Silicate", "Phosphate", "Chlorophyll A"),
+  total_records = c(71698, 71499, 74514, 58424))
+
+for (i in 1:length(data_fns)) {
+  data <- read.csv(data_fns[i])
+  
+  param_name <- unique(data$PARAMETER_NAME)
+  cat(param_name, '\n')
+  
+  if (param_name %in% data14$variable){
+    cat("Total records used in 2014 climatology: ")
+    cat(data14$total_records[data14$variable == param_name], '\n')
+  } else {
+    cat("Variable not present in 2014 climatology. \n")
+  }
+  cat("Total records available: ")
+  cat(nrow(data), '\n')
+  
+  
+  cat('\n \n')
+  
+}
+
+```
+
+
+
+
+
+# Profile plots
+
+Visualize profile for all climatology data.
+
+```{r}
+data_fns <- list.files('data/filtered_data/', pattern = '.csv', full.names = TRUE)
+
+
+for (i in 1:length(data_fns)) {
+  data <- read.csv(data_fns[i])
+  param_name <- unique(data$PARAMETER_NAME)
+  
+  p_prof <- ggplot(data) +
+    geom_point(aes(x = DATA_VALUE, y = HEADER_START_DEPTH))+
+    scale_y_reverse()+
+    labs(x = 'Data Value', y = 'Depth') +
+    scale_x_continuous(position = 'top')+
+    ggtitle(paste(param_name, 'profile of all data for climatology'))
+    
+  print(p_prof)
+}
+
+
+```
+
+
+# Map plots
+
+```{r}
+boxdat <- read.csv("Gordana/2014_boxes.csv")
+boxdat <- boxdat %>%
+  group_by(box)
+
+data(coastlineWorldFine)
+clwf <- as.data.frame(coastlineWorldFine@data)
+
+
+data_fns <- list.files('data/filtered_data/', pattern = '.csv', full.names = TRUE)
+
+
+for (i in 1:length(data_fns)) {
+  data <- read.csv(data_fns[i])
+  param_name <- unique(data$PARAMETER_NAME)
+  
+  pp <- ggplot()+
+    geom_polygon(data = boxdat,
+                 aes(x = longitude, y = latitude, fill = as.factor(box)),
+                 colour = 'black')+
+    geom_polygon(data = clwf,
+                 aes(x = longitude, y = latitude),
+                 colour = 'grey')+
+    geom_point(data = data,
+               aes(x = EVENT_MIN_LON, y = EVENT_MIN_LAT),
+               shape = 21,
+               colour ='black',
+               fill = 'darkgrey',
+               alpha = 0.2) +
+    scale_x_continuous(limits = c(-71, -48),
+                       expand = c(0,0))+
+    scale_y_continuous(limits = c(37, 48),
+                       expand = c(0,0)) +
+    labs(fill = 'Box')+
+    theme_classic()+
+    ggtitle(paste('Spatial distribution of', param_name))
+  
+  print(pp)
+}
+
+```
+
+

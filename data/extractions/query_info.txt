@@ -1,0 +1,11 @@
+E. O'Grady May 1 2024
+
+These files were extracted from BioChem, May 1 2024. Using queries in ../sql_queries/
+
+Parameters were queried separately to ease processing burden due to file size. 
+
+Each parameter was queried based on
+- a bounding box of 37° N to 48° N and 71° W to 48° W 
+- Mission start date after Jan 1, 1999
+
+These tables include distinct replicate values where they exist
