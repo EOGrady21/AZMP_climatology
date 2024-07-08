@@ -521,3 +521,118 @@ for (boxnum in 1:9) {
   }
   
 }
+
+# plot 7 ----
+
+
+#for (boxnum in 1:9) {
+  for (var in 1:9) {
+    var14 <- dict_var$code[var]
+    var24 <- dict_var$variable[var]
+    
+    
+    sdat24 <- data24 %>%
+      filter(variable == var24)
+    
+    sdat14 <- data14 %>%
+      filter(variable == var14)
+    if (nrow(sdat14) != 0) {
+    
+    for (i in 1:length(sdat14$variable)){ 
+      sdat14$variable[i] <- dict_var$variable[dict_var$code == sdat14$variable[i]]
+    }
+    
+    alldat <- full_join(sdat24, sdat14,
+                            suffix = c('24', '14'),
+                            by = c('DEPTH_BIN' = 'depth_bin',
+                                   'MONTH' = 'month',
+                                   'BOX' = 'box',
+                                   'variable' = 'variable',
+                                   'season' = 'season')) %>%
+      filter(!is.na(mval14)) %>%
+      select('DEPTH_BIN', 'MONTH', 'BOX', 'variable', 'mval24', 'mval14', 'std', 'sd', 'min_c14', 'max_c14', 'min_c24', 'max_c24') 
+    
+    alldat_l_m <- pivot_longer(alldat,
+                             cols = c('mval14', 'mval24'),
+                             names_to = 'year',
+                             values_to = 'mval',
+                             names_prefix = 'mval') %>%
+      select('DEPTH_BIN', 'MONTH', 'BOX', 'variable', 'year', 'mval')
+    
+    all_dat_l_min <- pivot_longer(alldat,
+                                  cols = c('min_c14', 'min_c24'),
+                                  names_to = 'year',
+                                  values_to = 'min',
+                                  names_prefix = 'min_c') %>%
+      select('DEPTH_BIN', 'MONTH', 'BOX', 'variable', 'year', 'min')
+    
+    all_dat_l_max <- pivot_longer(alldat,
+                                  cols = c('max_c14', 'max_c24'),
+                                  names_to = 'year',
+                                  values_to = 'max',
+                                  names_prefix = 'max_c') %>%
+      select('DEPTH_BIN', 'MONTH', 'BOX', 'variable', 'year', 'max')
+    
+    alldat_l <- alldat_l_m %>%
+      left_join(all_dat_l_min, by = c('DEPTH_BIN', 'MONTH', 'BOX', 'variable', 'year')) %>%
+      left_join(all_dat_l_max, by = c('DEPTH_BIN', 'MONTH', 'BOX', 'variable', 'year')) %>%
+      mutate(year = as.factor(paste0('20',year)))
+    
+    
+      
+      # pp <- ggplot(data = alldat_l, aes(x = as.factor(MONTH), y = mval))+
+      #   geom_boxplot(aes(fill = year))+
+      #   labs(x = 'Month', y = 'Mean Value') +
+      #   ggtitle(paste(var14))+
+      #   facet_wrap(facets = 'BOX')
+       
+      alldat_l_summarized <- alldat_l %>%
+        group_by(MONTH, year, BOX) %>%
+        summarize(
+          mval = mean(mval),
+          min = min(min),
+          max = max(max)
+        )
+    } else{
+      # if var is only in 24
+      alldat_l_summarized <- sdat24 %>%
+        mutate(year = as.factor('2024')) %>%
+        group_by(MONTH, year, BOX) %>%
+        summarize(
+          mval = mean(mval, na.rm = TRUE),
+          min = min(min_c, na.rm = TRUE),
+          max = max(max_c, na.rm = TRUE)
+        )
+    }
+      
+    p_labeller <- function(variable,value){
+      return(paste('Box', value))
+    }
+    
+      # Create the plot
+      pp <- ggplot(data = alldat_l_summarized,
+                   aes(x = as.factor(MONTH), y = mval)) +
+        geom_boxplot(aes(ymin = min,
+                         ymax = max,
+                         lower = min,
+                         upper = max,
+                         middle = mval,
+                         fill = year),
+                     stat = "identity") +
+        labs(x = 'Month', y = 'Value', fill = '') +
+        ggtitle(paste(var24)) +
+        facet_wrap(facets = 'BOX', labeller = p_labeller)+
+        theme_classic()+
+        theme(axis.text = element_text(size = 15), 
+              title = element_text(size = 25), 
+              legend.text = element_text(size = 15),
+              strip.text = element_text(size = 20))+
+        coord_cartesian(ylim = c(0, NA))
+      
+      ggsave(paste0('plots/boxplot_', var24, '.png'), pp,
+              width = 16, height = 16)
+    
+    
+  }
+  
+#}

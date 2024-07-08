@@ -96,6 +96,9 @@ for (i in 1:length(data_fns)) {
   data <- read.csv(data_fns[i])
   param_name <- unique(data$PARAMETER_NAME)
   
+  data <- data %>%
+    mutate(MONTH = format(as.Date(data$EVENT_START, '%d-%b-%y'), '%m'))
+  
   pp <- ggplot()+
     geom_polygon(data = boxdat,
                  aes(x = longitude, y = latitude, fill = as.factor(box)),
@@ -115,7 +118,8 @@ for (i in 1:length(data_fns)) {
                        expand = c(0,0)) +
     labs(fill = 'Box')+
     theme_classic()+
-    ggtitle(paste('Spatial distribution of', param_name))
+    ggtitle(paste('Spatial distribution of', param_name))+
+    facet_wrap('MONTH')
   
   print(pp)
 }

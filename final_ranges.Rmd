@@ -105,6 +105,9 @@ pp2 <- ggplot(data_summ) +
   
 print(pp2)
 
+
+
+
 all_data_summ[[i]] <- data_summ %>%
   mutate(variable = param_name)
 
@@ -146,7 +149,6 @@ for (i in 1:nrow(dict_var)) {
     vardat14 <- test36[row_ind, ]
     names(vardat14) <- c(1:9)
     
-    # TODO reformat data
     var_df <- list()
     for (box_num in 1:length(vardat14)){
       box_df <- list()
