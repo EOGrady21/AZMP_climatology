@@ -9,7 +9,7 @@ polyy <- c(48, 37, 37, 48)
 polyx <- c(-71, -71, -48, -48)
 
 # define which years to pull data
-years <- 1999:2023
+years <- 2019:2023
 #years <- c(1999, 2001, 2009, 2017, 2023)
 
 # define path to archived data
@@ -39,4 +39,4 @@ for(iy in 1:length(years)){
     ctd <- c(ctd, d[keep])   
 }
 
-save(ctd, file = 'ctd.rda')
+save(ctd, file = 'ctd_4.rda')
