@@ -123,7 +123,6 @@ boxdat <- read.csv("Gordana/2014_boxes.csv")
 df_sf <- st_as_sf(boxdat, coords = c("longitude", "latitude"), crs = 4326)
 
 # Create polygons
-# Assuming each box consists of 4 points in order
 df_poly <- df_sf %>%
   group_by(box) %>%
   summarise(geometry = st_combine(geometry), do_union = FALSE) %>%

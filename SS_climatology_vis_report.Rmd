@@ -1,0 +1,202 @@
+---
+title: "Scotian Shelf Climatology"
+output: html_notebook
+---
+
+This is a visualization of the updated 2024 Sotian Shelf climatology and how it compares to the previous climatology generated in 2014 by Gordana Lazin. 
+
+## Set-up
+
+Load in libraries and data products.
+
+``` {r setup}
+library(ocedata)
+library(ggplot2)
+library(tidyverse)
+library(cmocean)
+library(sf)
+library(scales)
+
+
+# read in boxes
+boxdat <- read.csv("Gordana/2014_boxes.csv")
+boxdat <- boxdat %>%
+  group_by(box)
+
+box_poly <- st_as_sf(boxdat, coords = c("longitude", "latitude"), crs = 4326)
+# Create polygon
+df_poly <- box_poly %>%
+  group_by(box) %>%
+  summarise(geometry = st_combine(geometry), do_union = FALSE) %>%
+  st_cast("POLYGON")
+
+  # load in existing boxes
+  polygons <- read.csv('data/Climate_ScotiaFundy_Polygons.csv')
+
+# coastline object
+data(coastlineWorldFine)
+clwf <- as.data.frame(coastlineWorldFine@data)
+
+depth_bins <- data.frame(bin = c(1, 2, 3, 4), min_depth = c(0, 10, 30, 100), max_depth = c(10, 30, 100, 5000))
+
+yaxis_order <- rev(c('1-1', '1-2', '1-3', '1-4',
+                     '2-1', '2-2', '2-3', '2-4',
+                     '3-1', '3-2', '3-3', '3-4',
+                     '4-1', '4-2', '4-3', '4-4',
+                     '5-1', '5-2', '5-3', '5-4',
+                     '6-1', '6-2', '6-3', '6-4',
+                     '7-1', '7-2', '7-3', '7-4',
+                     '8-1', '8-2', '8-3', '8-4',
+                     '9-1', '9-2', '9-3', '9-4'))
+
+# read in Gordana's data
+data14 <- read.csv('Gordana/AZMP_climatology_stats_2014.csv')
+
+# read in stats from 2024
+data24 <- read.csv('AZMP_climatology_2024-06-03.csv')
+
+dict_var <- data.frame(variable = unique(data24$variable))
+dict_var$code <- c('amon', 'cphl', 'ntrz', 'ntri', 'doxy', 'phae', 'phos', 'psal', 'slca')
+
+# group seasons
+seasons <- data.frame('season' = c(rep('spring', 3),
+                                   rep('summer', 3),
+                                   rep('fall', 3),
+                                   rep('winter', 3)),
+                      'month' = c(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2))
+
+data14 <- data14 %>%
+  right_join(seasons)
+data24 <- data24 %>%
+  right_join(seasons, c('MONTH' = 'month'))
+
+# find actual max compared value min/max or 3std whichever is greater
+
+data14 <- data14 %>%
+  mutate(min_sd = (data14$mval - 3*data14$std)) %>%
+  mutate(max_sd = (data14$mval + 3*data14$std)) %>%
+  mutate(min_c = case_when(
+    min_sd < min ~ min_sd,
+    min < min_sd ~ min
+  )) %>%
+  mutate(max_c = case_when(
+    max_sd > max ~ max_sd,
+    max > max_sd ~ max
+  ))
+
+data24 <- data24 %>%
+  mutate(min_sd = (data24$mval - 3*data24$sd)) %>%
+  mutate(max_sd = (data24$mval + 3*data24$sd)) %>%
+  mutate(min_c = case_when(
+    min_sd < min_val ~ min_sd,
+    min_val < min_sd ~ min_val
+  )) %>%
+  mutate(max_c = case_when(
+    max_sd > max_val ~ max_sd,
+    max_val > max_sd ~ max_val
+  ))
+
+```
+
+
+# TODO add some lower level ploots about data distrubtion over time
+# TODO plot n data points over decade
+
+
+# Chlorophyll
+
+## Visualize 2024 coverage
+
+```{r 2024coverage}
+plotdat <- data24[data24$variable == 'Chlorophyll A', ] %>%
+  group_by(BOX, MONTH) %>%
+  summarize(n_total = sum(n))
+
+plotbox <- ungroup(boxdat) %>%
+  right_join(plotdat, by = c('box' = 'BOX')) %>%
+  mutate(month_name = month.name[plotbox$MONTH])
+
+plotbox$month_name <- forcats::fct_relevel(plotbox$month_name, month.name)
+
+# add n to plotbox
+
+pp <- ggplot() +
+  geom_polygon(data = clwf, aes(x = longitude, y = latitude)) +
+  geom_polygon(data = plotbox[plotbox$box == 1,],
+               aes(x = longitude,
+                   y = latitude,
+                   group = box,
+                   fill = n_total),
+               color = "grey",
+               )+ # plot one box at a time with fill = n
+  geom_polygon(data = plotbox[plotbox$box == 2,],
+               aes(x = longitude,
+                   y = latitude,
+                   group = box,
+                   fill = n_total),
+               color = "grey",
+               )+
+  geom_polygon(data = plotbox[plotbox$box == 3,],
+               aes(x = longitude,
+                   y = latitude,
+                   group = box,
+                   fill = n_total),
+               color = "grey",
+               )+
+  geom_polygon(data = plotbox[plotbox$box == 4,],
+               aes(x = longitude,
+                   y = latitude,
+                   group = box,
+                   fill = n_total),
+               color = "grey",
+               )+
+  geom_polygon(data = plotbox[plotbox$box == 5,],
+               aes(x = longitude,
+                   y = latitude,
+                   group = box,
+                   fill = n_total),
+               color = "grey",
+               )+
+  geom_polygon(data = plotbox[plotbox$box == 6,],
+               aes(x = longitude,
+                   y = latitude,
+                   group = box,
+                   fill = n_total),
+               color = "grey",
+               )+
+  geom_polygon(data = plotbox[plotbox$box == 7,],
+               aes(x = longitude,
+                   y = latitude,
+                   group = box,
+                   fill = n_total),
+               color = "grey",
+               )+
+  geom_polygon(data = plotbox[plotbox$box == 8,],
+               aes(x = longitude,
+                   y = latitude,
+                   group = box,
+                   fill = n_total),
+               color = "grey",
+               )+
+  geom_polygon(data = plotbox[plotbox$box == 9,],
+               aes(x = longitude,
+                   y = latitude,
+                   group = box,
+                   fill = n_total),
+               color = "grey",
+               )+
+  # facet by month
+  facet_wrap(~ month_name )+
+  scale_fill_cmocean(name = 'matter')+
+  scale_x_continuous(limits = c(-71, -48), labels = NULL)+
+  scale_y_continuous(limits = c(37, 48), labels = NULL) +
+  coord_cartesian(expand = FALSE)+
+  theme_classic()+
+  labs(fill = 'Number of Data Points', y = '', x = '')
+
+```
+
+
+
+
+
