@@ -621,6 +621,74 @@ TODO
   (outside IQR) were removed from data. 
   
   
+  Compare data distribution after QC
+  
 ```{r}
+
+data_fns <- list.files('data/filtered_data/', pattern = '.csv', full.names = TRUE)
+
+   # load in oce coastline
+  data(coastlineWorldFine)
+  clwf <- data.frame(coastlineWorldFine@data)
+  
+    # load in existing boxes
+  polygons <- read.csv('data/Climate_ScotiaFundy_Polygons.csv')
+  
+
+
+for (i in 1:length(data_fns)) {
+  
+  data <- read.csv(data_fns[i])
+  
+  param_name <- unique(data$PARAMETER_NAME)
+  
+  # temporal coverage by year/month ----
+  yearMonth <- data %>%
+    mutate(., year = format(as.Date(data$EVENT_START, '%d-%b-%y'), '%Y')) %>%
+    mutate(., month = format(as.Date(data$EVENT_START, '%d-%b-%y'), '%b')) %>%
+    group_by(year, month) %>%
+    summarise(N = n())
+  
+  p_temp <- ggplot(yearMonth, aes(year, month)) +
+    geom_tile(aes(fill = N), colour = "white") +
+    scale_fill_gradient(low = "blue", high = "red") +
+    labs(x = "Year", y = "Month", fill = "Number of \n Data Points") +
+    theme_minimal()+
+    ggtitle(paste(param_name, "temporal coverage"), subtitle = paste("Total points: ", sum(yearMonth$N)))+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+    print(p_temp)
+
+  # spatial coverage ----
+  
+ 
+  p_sp <- ggplot(data) +
+    geom_polygon(data = clwf, aes(x = longitude, y = latitude)) +
+    geom_polygon(data = polygons, aes(x = Longitude, y = Latitude, group = Area), color = "red", fill = NA)+
+    geom_point(aes(x = HEADER_START_LON, y = HEADER_START_LAT), colour ='darkBlue', alpha = 0.4) +
+    scale_x_continuous(limits = c(-71, -48))+
+    scale_y_continuous(limits = c(37, 48)) +
+    theme_classic()+
+    ggtitle(paste(param_name, "spatial coverage"))
+    
+  print(p_sp)
+  
+  # raw value range ----
+    # TODO check units on all params
+  
+  p_range <- ggplot(data) +
+    geom_point(aes(x = as.Date(EVENT_START, '%d-%b-%y'),
+                   y = DATA_VALUE),
+               colour = 'darkBlue') +
+    scale_x_date(date_breaks = "1 year", date_labels = '%Y')+
+    labs(x = 'Date', y = 'Data Value')+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+    ggtitle(paste(param_name, "data range"))
+
+  
+
+  print(p_range)
+}
+
 
 ```

@@ -215,13 +215,13 @@ var24 <- dict_var$variable[var]
 
 for (boxnum in 1:9){
 #boxnum <- 3
-  for (sind in 1:4){
-seasonval <- unique(seasons$season)[sind]
+ # for (sind in 1:4){
+#seasonval <- unique(seasons$season)[sind]
 sdat24 <- data24 %>%
   filter(variable == var24) %>%
   filter(BOX == boxnum) %>%
-  filter(season == seasonval) %>%
-  group_by(DEPTH_BIN) %>%
+  #filter(season == seasonval) %>%
+  group_by(DEPTH_BIN, season) %>%
   summarize(min_c = min(min_c, na.rm = TRUE),
             max_c = max(max_c, na.rm = TRUE),
             ) %>%
@@ -230,8 +230,8 @@ sdat24 <- data24 %>%
 sdat14 <- data14 %>%
   filter(variable == var14) %>%
   filter(box == boxnum)%>%
-  filter(season == seasonval)%>%
-  group_by(depth_bin) %>%
+  #filter(season == seasonval)%>%
+  group_by(depth_bin, season) %>%
   summarize(min_c = min(min_c, na.rm = TRUE),
             max_c = max(max_c, na.rm = TRUE),
   ) %>%
@@ -242,34 +242,36 @@ if (var24 == 'Salinity') {
   xlimmin <- floor(min(sdat24$min_c, na.rm = TRUE))
 }
 pp <- ggplot()+
-  geom_rect(data = sdat14,
+  geom_rect(data = sdat14[!is.na(sdat14$season),],
             aes(xmin = min_c, xmax = max_c,
                 ymin = min_depth, ymax = max_depth),
             fill = NA,
             alpha = 0.5, 
-            colour = 'lightblue',
+            colour = 'blue',
             linetype = 'dashed',
             linewidth = 2)+
-  geom_rect(data = sdat24,
+  geom_rect(data = sdat24[!is.na(sdat24$season),],
             aes(xmin = min_c, xmax = max_c,
                 ymin = min_depth, ymax = max_depth),
-            fill = 'pink',
+            fill = 'darkgreen',
             alpha = 0.5,
             colour = 'black',
             linetype = 'solid',
             linewidth = 2)+
+  facet_wrap(~season)+
   scale_y_reverse()+
   coord_cartesian(ylim = c(200, 0), xlim = c(xlimmin, NA))+
   theme_classic()+
   labs(x = 'Value', y = 'Depth [m]')+
-  ggtitle(paste(var24, "climatology profile: Box", boxnum,',', seasonval),
-          subtitle = 'Pink: 2024, Blue-Dash: 2014')+
-  theme(axis.text = element_text(size = 15),
-        title = element_text(size = 25))
+  ggtitle(paste(var24, "climatology profile: Box", boxnum),
+          subtitle = 'Green: 2024, Blue: 2014')+
+  theme(axis.text = element_text(size = 25),
+        title = element_text(size = 30),
+        strip.text = element_text(size = 20))
 
-ggsave(paste0('plots/profile_box', boxnum, '_', seasonval, '_', var24, '.png'), pp,
+ggsave(paste0('plots/season_profile_box', boxnum, '_', var24, '.png'), pp,
        width = 10, height = 12)
-}
+#}
 }
 }
 
@@ -522,7 +524,7 @@ for (boxnum in 1:9) {
   
 }
 
-# plot 7 ----
+# plot 7 (boxplot) ----
 
 
 #for (boxnum in 1:9) {
@@ -590,8 +592,8 @@ for (boxnum in 1:9) {
         group_by(MONTH, year, BOX) %>%
         summarize(
           mval = mean(mval),
-          min = min(min),
-          max = max(max)
+          min = min(min, na.rm = TRUE),
+          max = max(max, na.rm = TRUE)
         )
     } else{
       # if var is only in 24
@@ -623,11 +625,12 @@ for (boxnum in 1:9) {
         ggtitle(paste(var24)) +
         facet_wrap(facets = 'BOX', labeller = p_labeller)+
         theme_classic()+
-        theme(axis.text = element_text(size = 15), 
-              title = element_text(size = 25), 
+        theme(axis.text = element_text(size = 25), 
+              title = element_text(size = 30), 
               legend.text = element_text(size = 15),
               strip.text = element_text(size = 20))+
-        coord_cartesian(ylim = c(0, NA))
+        coord_cartesian(ylim = c(0, NA))+
+        scale_fill_manual(values = c('2024' = 'lightblue3', '2014' = 'chartreuse4'))
       
       ggsave(paste0('plots/boxplot_', var24, '.png'), pp,
               width = 16, height = 16)

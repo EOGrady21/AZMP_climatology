@@ -1,7 +1,7 @@
 rm(list=ls())
 library(oce)
 # load in pre-read data
-load('ctd.rda')
+load('ctd_2.rda')
 
 # Need to go through each profile and identify flurometer sensors that measure
 #   chlorophyll and CDOM.

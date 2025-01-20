@@ -3,7 +3,7 @@ title: "Scotian Shelf Climatology"
 output: html_notebook
 ---
 
-This is a visualization of the updated 2024 Sotian Shelf climatology and how it compares to the previous climatology generated in 2014 by Gordana Lazin. 
+This is a visualization of the updated 2024 Scotian Shelf climatology and how it compares to the previous climatology generated in 2014 by Gordana Lazin. 
 
 ## Set-up
 
@@ -99,21 +99,23 @@ data24 <- data24 %>%
 ```
 
 
-# TODO add some lower level ploots about data distrubtion over time
-# TODO plot n data points over decade
 
 
-# Chlorophyll
+
 
 ## Visualize 2024 coverage
 
-```{r 2024coverage}
-plotdat <- data24[data24$variable == 'Chlorophyll A', ] %>%
+```{r 2024-coverage-map}
+
+for (var in unique(data24$variable)){
+plotdat <- data24[data24$variable == var, ] %>%
   group_by(BOX, MONTH) %>%
   summarize(n_total = sum(n))
 
 plotbox <- ungroup(boxdat) %>%
-  right_join(plotdat, by = c('box' = 'BOX')) %>%
+  right_join(plotdat, by = c('box' = 'BOX')) 
+
+plotbox <- plotbox %>%
   mutate(month_name = month.name[plotbox$MONTH])
 
 plotbox$month_name <- forcats::fct_relevel(plotbox$month_name, month.name)
@@ -192,10 +194,52 @@ pp <- ggplot() +
   scale_y_continuous(limits = c(37, 48), labels = NULL) +
   coord_cartesian(expand = FALSE)+
   theme_classic()+
-  labs(fill = 'Number of Data Points', y = '', x = '')
+  labs(fill = 'Number of Data Points', y = '', x = '')+
+  ggtitle(var)
+
+print(pp)
+
+}
 
 ```
 
+
+```{r 2024-box-profiles}
+
+for (var in unique(data24$variable)){
+
+plotdat <- data24 %>%
+  filter(variable == var)
+
+pp <- ggplot() +
+  geom_path(data = plotdat,
+            aes(x = mval,
+                y = min_depth,
+                group = BOX,
+                colour = as.factor(BOX)),
+            linewidth = 2, 
+            alpha = 0.5) +
+  geom_path(data = plotdat, 
+            aes(x = max_c, 
+                y = min_depth,
+                group = BOX,
+                colour = as.factor(BOX)),
+            linetype = 'dashed',
+            linewidth = 0.5) +
+  scale_y_reverse() +
+  scale_color_brewer(palette = 'Paired')+
+  facet_wrap(~MONTH, labeller = labeller(BOX = function(x) paste("Box", x))) +
+  labs(colour = 'Box' , x = 'Data Value', y = 'Depth')+
+  theme_classic()+
+  ggtitle(var)
+
+print(pp)
+
+}
+
+
+
+```
 
 
 
