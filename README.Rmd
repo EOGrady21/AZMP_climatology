@@ -147,22 +147,34 @@ number of data points collected in a given month.
 ## Reports and scripts available
 
 The workflow followed to produce this climatology followed:
+
   - initial_summary.Rmd which gave an intial scope of the extracted data
+  
   - qc.rmd where data was quality controlled and excluded based on testing
+  
   - filtered_summary.rmd where QC'd data was summarized and visualized
+  
   - report.rmd summarizes the QC'd data in a report format
+  
   - visualize_final_ranges_2024.rmd where final data was summarized into climatology statistics
+  
   - final_climatology_calculation.Rmd where climatology was calculated using 2014 data to fill data gaps
+  
+  
   
 Other scripts were used to generate additional plots and investigate other data aspects.
 
 Some work was done to investigate the inclusion of CTD chlorophyll A in the climatology
+
   (process_ctd_Data.R, 01,_readData.R, 02_inferChlorophyllInstrument.R)
+  
 This avenue was not further pursued due to high effort, and low potential for improvement in the climatology.
 
 Some work was also done to investigate the inclusion of TS data for an updated 
 physical climatology. 
+
   (TS_climatology_CASTS.R, ts_climatology.R)
+  
 This could be further pursued in the future but was beyond the capacity of this project.
 
 
