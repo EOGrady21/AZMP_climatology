@@ -16,20 +16,24 @@ knitr::opts_chunk$set(
 <!-- badges: start -->
 <!-- badges: end -->
 
-The goal of AZMP_climatology is to ...
+The goal of AZMP_climatology is to generate a monthly climatology product
+for the Scotian Shelf. This product will be used to update the QC methodology 
+used at Bedford Institute of Oceanography to quality control bottle data from
+our long term monitoring programs. 
 
-What is special about using `README.Rmd` instead of just `README.md`? You can include R chunks like so:
+The current QC system compares bottle data to a monthly climatology which was 
+generated in 2014 by Gordana Lazin, Andrew Cogswell, Catherine Johnson, 
+Shelley Bond and Jeff Jackson (unpublished). This climatology makes some small 
+improvements in data quality and parameter coverage. It also updates the dataset
+to a more relevant time period. 
 
-```{r cars}
-summary(cars)
-```
+## Reports and scripts available
 
-You'll still need to render `README.Rmd` regularly, to keep `README.md` up-to-date.
 
-You can also embed plots, for example:
+## Products available
 
-```{r pressure, echo = FALSE}
-plot(pressure)
-```
 
-In that case, don't forget to commit and push the resulting figure files, so they display on GitHub.
+## Update Log
+
+
+
