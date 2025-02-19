@@ -1,0 +1,197 @@
+---
+title: "AZMP Climatology report 2024"
+output: html_notebook
+---
+
+```{r setup}
+library(librarian)
+shelf(tidyverse, DT, ggplot2, oce, ocedata, plotly)
+
+```
+
+# Introduction
+
+This report will outline the process to update the climatology used in the quality control of AZMP data in the Maritimes region. The climatology was last updated by Gordana Lazin in 2014. 
+
+# Geographic Bounds
+37° N to 48° N and 71° W to 48° W 
+The same range used by Lazin in 2014.
+
+
+# Temporal Coverage
+Extracted data after Jan 1 1999, to give a 25 year period of data.
+
+
+# BioChem extraction
+
+BioChem data was extracted May 1 , 2024.
+
+Parameters were queried separately to ease processing burden due to file size. 
+
+Each parameter was queried based on
+- a bounding box of 37° N to 48° N and 71° W to 48° W 
+- Mission start date after Jan 1, 1999
+
+These tables include distinct replicate values where they exist.
+
+
+See query scripts in sql_queries directory.
+
+
+# Visualize scope of data
+
+```{r fig.align='center', fig.keep='all'}
+
+data_fns <- list.files('data/extractions/', pattern = '.csv', full.names = TRUE)
+
+   # load in oce coastline
+  data(coastlineWorldFine)
+  clwf <- data.frame(coastlineWorldFine@data)
+  
+    # load in existing boxes
+  polygons <- read.csv('data/Climate_ScotiaFundy_Polygons.csv')
+  
+
+
+for (i in 1:length(data_fns)) {
+  
+  data <- read.csv(data_fns[i])
+  
+  param_name <- unique(data$PARAMETER_NAME)
+  
+  # temporal coverage by year/month ----
+  yearMonth <- data %>%
+    mutate(., year = format(as.Date(data$EVENT_START, '%d-%b-%y'), '%Y')) %>%
+    mutate(., month = format(as.Date(data$EVENT_START, '%d-%b-%y'), '%b')) %>%
+    group_by(year, month) %>%
+    summarise(N = n())
+  
+  p_temp <- ggplot(yearMonth, aes(year, month)) +
+    geom_tile(aes(fill = N), colour = "white") +
+    scale_fill_gradient(low = "blue", high = "red") +
+    labs(x = "Year", y = "Month", fill = "Number of \n Data Points") +
+    theme_minimal()+
+    ggtitle(paste(param_name, "temporal coverage"), subtitle = paste("Total points: ", sum(yearMonth$N)))+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+    print(p_temp)
+
+  # spatial coverage ----
+  
+ 
+  p_sp <- ggplot(data) +
+    geom_polygon(data = clwf, aes(x = longitude, y = latitude)) +
+    geom_polygon(data = polygons, aes(x = Longitude, y = Latitude, group = Area), color = "red", fill = NA)+
+    geom_point(aes(x = HEADER_START_LON, y = HEADER_START_LAT), colour ='darkBlue', alpha = 0.4) +
+    scale_x_continuous(limits = c(-71, -48))+
+    scale_y_continuous(limits = c(37, 48)) +
+    theme_classic()+
+    ggtitle(paste(param_name, "spatial coverage"))
+    
+  print(p_sp)
+  
+  # raw value range ----
+    # TODO check units on all params
+  
+  p_range <- ggplot(data) +
+    geom_point(aes(x = as.Date(EVENT_START, '%d-%b-%y'),
+                   y = DATA_VALUE),
+               colour = 'darkBlue') +
+    scale_x_date(date_breaks = "1 year", date_labels = '%Y')+
+    labs(x = 'Date', y = 'Data Value')+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+    ggtitle(paste(param_name, "data range"))
+
+  
+
+  print(p_range)
+}
+
+
+
+```
+
+
+
+# Summary of data
+
+These tables show all the methods (and their units), included in each parameter.
+
+```{r fig.keep='all'}
+data_fns <- list.files('data/extractions/', pattern = '.csv', full.names = TRUE)
+
+
+for (i in 1:length(data_fns)) {
+  
+  data <- read.csv(data_fns[i])
+  
+  param_name <- unique(data$PARAMETER_NAME)
+  
+  methods <- data %>%
+    distinct(METHOD, UNIT)
+  
+  
+  print(knitr::kable(methods, col.names = c('Methods', 'Units'), caption = paste(param_name, 'methods & units')))
+}
+  
+
+```
+
+# Data Quality Summary
+
+Quality overview, these tables show number and percentage of data points with each quality flag, by parameter.
+
+```{r}
+data_fns <- list.files('data/extractions/', pattern = '.csv', full.names = TRUE)
+
+
+for (i in 1:length(data_fns)) {
+  
+  data <- read.csv(data_fns[i])
+  
+  param_name <- unique(data$PARAMETER_NAME)
+  
+  qc_summ <- data %>%
+    group_by(DATA_QC_CODE) %>%
+    summarize(Count = n())%>%
+    mutate(Percentage = round(Count / sum(Count) * 100, 2))
+  
+  print(knitr::kable(qc_summ, caption = paste(param_name, "Quality Summary")))
+  
+}
+
+
+
+```
+
+# Quality Flagged Profile Plots
+
+Profile plots for all data of each parameter, where colours show data quality flag.
+
+
+```{r fig.keep='all'}
+data_fns <- list.files('data/extractions/', pattern = '.csv', full.names = TRUE)
+
+col_vec = c('grey', 'black', 'yellow', 'orange', 'red', 'purple', 'blue', 'springgreen', 'cyan', 'magenta')
+names(col_vec) <- c('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
+
+
+for (i in 1:length(data_fns)) {
+  
+  data <- read.csv(data_fns[i])
+  
+  param_name <- unique(data$PARAMETER_NAME)
+  
+  p_prof <- ggplot(data) +
+    geom_point(aes(x = DATA_VALUE, y = HEADER_START_DEPTH, colour = as.factor(DATA_QC_CODE)))+
+    scale_y_reverse()+
+    scale_color_manual(values = col_vec)+
+    labs(x = 'Data Value', y = 'Depth', colour = 'QC Flag') +
+    scale_x_continuous(position = 'top')+
+    ggtitle(paste(param_name, 'profile summary with quality control'))
+    
+  print(p_prof)
+}
+
+
+```

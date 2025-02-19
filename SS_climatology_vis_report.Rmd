@@ -229,6 +229,7 @@ pp <- ggplot() +
   scale_y_reverse() +
   scale_color_brewer(palette = 'Paired')+
   facet_wrap(~MONTH, labeller = labeller(BOX = function(x) paste("Box", x))) +
+  # TODO add chr month labels
   labs(colour = 'Box' , x = 'Data Value', y = 'Depth')+
   theme_classic()+
   ggtitle(var)
@@ -242,5 +243,6 @@ print(pp)
 ```
 
 
+# TODO plot merged climatology data
 
 

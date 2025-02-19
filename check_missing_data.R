@@ -1,3 +1,37 @@
+
+
+
+
+###############################
+#   ROUGH WORKING SCRIPT ----
+###############################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # check for all holes in 2024 climatology
 library(tidyverse)
 library(ggplot2)
@@ -165,6 +199,21 @@ write.csv(data_m, 'data/merged_climatology.csv', row.names = FALSE)
 # loop to plot each variable
 # ggplot2 profile plot of data_m with depth on y axis and data value on x axis, display as boxes coloured by source
 # use geom_rect to display boxes from min to max depth
+xlimmin <- 0
+
+# add season to data_m
+
+# group seasons
+seasons <- data.frame('season' = c(rep('spring', 3),
+                                   rep('summer', 3),
+                                   rep('fall', 3),
+                                   rep('winter', 3)),
+                      'month' = c(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2))
+
+
+data_m <- data_m %>%
+  right_join(seasons, c('MONTH' = 'month'))
+data_m$season <- forcats::fct_relevel(data_m$season,  c("spring", "summer", "fall", "winter"))
 
 for (i in 1:length(unique(data_m$variable))) {
   var <- unique(data_m$variable)[i]
@@ -181,16 +230,17 @@ for (i in 1:length(unique(data_m$variable))) {
               aes(xmin = min_val_m,
                   xmax = max_val_m,
                   ymin = min_depth_m,
-                  ymax = max_depth_m,
-                  fill = source),
-              alpha = 0.25)+
+                  ymax = max_depth_m))+
     scale_y_reverse()+
-    facet_wrap(~month_name)+
-    ggtitle(paste('Merged data:', var))+
+    facet_wrap(~season)+
+    ggtitle(paste( var))+
     coord_cartesian(ylim = c(200, 0), xlim = c(xlimmin, NA))+
     theme_classic()+
     labs(x = 'Value', y = 'Depth [m]')+
-    scale_fill_manual(values = c('data14' = 'blue', 'data24' = 'red'))
+    #scale_fill_manual(values = c('data14' = 'blue', 'data24' = 'red'))+
+    theme(strip.text = element_text(size = 15),
+          axis.text = element_text(size = 15),
+          title = element_text(size = 25))
 
     
   
@@ -218,7 +268,7 @@ for (i in 1:length(unique(data_m$variable))) {
     ggtitle(paste('Merged data:', var), subtitle = 'Blue text shows percentage of 2014 data included in each month')+
     theme_classic()+
     labs(x = 'Month', y = 'Value')+
-    scale_fill_manual(values = c('data14' = 'blue', 'data24' = 'red'))+
+    #scale_fill_manual(values = c('data14' = 'blue', 'data24' = 'red'))+
   # add percentage of data14 in each month
   geom_text(data = vardat,
             aes(x = month_name,
@@ -226,7 +276,11 @@ for (i in 1:length(unique(data_m$variable))) {
                 label = vardat$percentage_data14,
                ),
             vjust = -0.5, 
-            colour = 'blue')
+            colour = 'blue')+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          strip.text = element_text(size = 15),
+          axis.text = element_text(size = 15),
+          title = element_text(size = 25))
   
   
   ggsave(paste0('plots/merged_data_boxplot_', var, '.png'), p, height = 12, width = 12)
@@ -274,4 +328,6 @@ for (i in 1:length(unique(data14$variable))) {
   ggsave(paste0('plots/2014_2024_timeseries_', var, '.png'), p, height = 12, width = 12)
   
 }
+
+
 

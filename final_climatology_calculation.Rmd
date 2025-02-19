@@ -1,0 +1,90 @@
+---
+title: "2024 Climatology Final Calculations"
+author: "Emily O'Grady"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+This document contains the code to marge the final 2024 climatology product with
+Lazin's 2014 climatology product to ensure maximum coverage. The 2024 climatology
+had some data gaps which needed to be filled in with the 2014 climatology data.
+
+```{r read-data}
+# read in Gordana's data
+data14 <- read.csv('Gordana/AZMP_climatology_stats_2014.csv')
+
+# read in stats from 2024
+data24 <- read.csv('AZMP_climatology_2024-06-03.csv')
+
+```
+
+
+
+```{r merge-data}
+data_m <- data24 %>%
+  full_join(data14, by = c('variable',
+                           'MONTH' = 'month',
+                           'BOX' = 'box',
+                           'DEPTH_BIN' = 'depth_bin')) %>%
+  mutate(source = ifelse(is.na(n), 'data14', 'data24')) %>%
+  mutate(mval_m = ifelse(is.na(mval.x), mval.y, mval.x)) %>%
+  mutate(n_m = ifelse(is.na(n), no, n)) %>%
+  mutate(min_val_m = ifelse(is.na(min_val), min, min_val)) %>%
+  mutate(max_val_m = ifelse(is.na(max_val), max, max_val)) %>%
+  mutate(sd_m = ifelse(is.na(sd), std, sd)) %>%
+  mutate(min_depth_m = ifelse(is.na(min_depth.x), min_depth.y, min_depth.x)) %>%
+  mutate(max_depth_m = ifelse(is.na(max_depth.x), max_depth.y, max_depth.x)) %>%
+  select(c(variable, MONTH, BOX, DEPTH_BIN, mval_m, n_m, min_val_m, max_val_m, sd_m, min_depth_m, max_depth_m, source))
+  
+```
+
+```{r write-data}
+# export data_m to csv
+write.csv(data_m, 'data/merged_climatology.csv', row.names = FALSE)
+
+```
+
+
+```{r visualize}
+
+# plot data_m boxplot of data values for each variable
+# includes percentage of each month filled with Gordana's data
+
+for (i in 1:length(unique(data_m$variable))) {
+  var <- unique(data_m$variable)[i]
+  
+  vardat <- data_m[data_m$variable == var,]
+  
+  vardat <- vardat %>%
+    mutate(month_name = month.name[vardat$MONTH]) %>%
+    group_by(month_name) %>%
+    mutate(percentage_data14 = round(sum(source == 'data14')/nrow(vardat)*100, digits = 2))
+  
+  vardat$month_name <- forcats::fct_relevel(vardat$month_name, month.name)
+  
+  p <- ggplot()+
+    geom_boxplot(data = vardat, aes(x = month_name, y = mval_m))+
+    ggtitle(paste('Merged data:', var), subtitle = 'Blue text shows percentage of 2014 data included in each month')+
+    theme_classic()+
+    labs(x = 'Month', y = 'Value')+
+    #scale_fill_manual(values = c('data14' = 'blue', 'data24' = 'red'))+
+  # add percentage of data14 in each month
+  geom_text(data = vardat,
+            aes(x = month_name,
+                y = max(vardat$mval_m, na.rm = TRUE), 
+                label = vardat$percentage_data14,
+               ),
+            vjust = -0.5, 
+            colour = 'blue')+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          strip.text = element_text(size = 15),
+          axis.text = element_text(size = 15),
+          title = element_text(size = 25))
+  
+  
+  ggsave(paste0('plots/merged_data_boxplot_', var, '.png'), p, height = 12, width = 12)
+  
+}
+```
+
+

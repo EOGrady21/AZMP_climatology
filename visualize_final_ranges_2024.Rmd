@@ -1,0 +1,234 @@
+---
+title: "AZMP Climatology Ranges"
+output: html_notebook
+---
+
+```{r setup}
+library(librarian)
+shelf(tidyverse, readr, cmocean, ggplot2, R.matlab)
+```
+
+This document details the ranges of each variable included in the 2024 version 
+of the AZMP climatology used for quality control of oceanographic data on the 
+Scotian Shelf by Fisheries and Oceans Canada Maritime region.
+
+
+```{r}
+# read in boxes
+boxdat <- read.csv("Gordana/2014_boxes.csv")
+boxdat <- boxdat %>%
+  group_by(box)
+
+box_poly <- st_as_sf(boxdat, coords = c("longitude", "latitude"), crs = 4326)
+  # Create polygon
+df_poly <- box_poly %>%
+  group_by(box) %>%
+  summarise(geometry = st_combine(geometry), do_union = FALSE) %>%
+  st_cast("POLYGON")
+
+# read in data files
+data_fns <- list.files(path = 'data/filtered_data', pattern = 'csv', full.names = TRUE)
+
+all_data_summ <- list()
+
+# loop for each variable
+for (i in 1:length(data_fns)) {
+
+  data <- read.csv(data_fns[i])
+  param_name <- unique(data$PARAMETER_NAME)
+  
+# group data by box
+data_l <- data %>%
+  select(NAME, EVENT_MIN_LAT, EVENT_MIN_LON, COLLECTOR_EVENT_ID, COLLECTOR_SAMPLE_ID)
+
+df_l_sf <- st_as_sf(data_l, coords = c("EVENT_MIN_LON", "EVENT_MIN_LAT"), crs = 4326)
+
+# Check which box each point is inside
+within_boxes <- as.data.frame(st_within(df_l_sf, df_poly))
+
+data <- data %>%
+  mutate(BOX = within_boxes$col.id )
+
+
+# group data by month
+
+data <- data %>%
+  mutate(MONTH = format(as.Date(data$EVENT_START, '%d-%b-%y'), '%m'))
+
+
+# gather data by depth bin
+
+data <- data %>%
+  mutate(DEPTH_BIN = case_when(
+    HEADER_START_DEPTH < 10 ~ 1,
+    HEADER_START_DEPTH >= 10 & HEADER_START_DEPTH < 30 ~ 2,
+    HEADER_START_DEPTH >= 30 & HEADER_START_DEPTH < 100 ~ 3,
+    HEADER_START_DEPTH >= 100 & HEADER_START_DEPTH <= 5000 ~ 4
+  ))
+
+data <- data %>%
+  group_by(BOX, MONTH, DEPTH_BIN)
+
+
+# facet plot by box and month
+depth_bins <- data.frame(bin = c(1, 2, 3, 4), min_depth = c(0, 10, 30, 100), max_depth = c(10, 30, 100, 5000))
+
+pp <- ggplot(data) +
+  geom_point(aes(x = DATA_VALUE, y = HEADER_START_DEPTH, colour = MONTH), shape = 21) +
+  scale_y_reverse()+
+  facet_wrap(vars(BOX), scales = 'free_y') +
+  theme_bw()+
+  ggtitle(paste(param_name, 'profiles by box'))+
+  labs(y = 'Depth [m]', x = 'Data Value')
+print(pp)
+
+# overlay plot with monthly range boxes, coloured by month on single axes
+
+data_summ <- data %>%
+  summarize(min_val = min(DATA_VALUE),
+            max_val = max(DATA_VALUE),
+            mval = mean(DATA_VALUE),
+            n = n(),
+            sd = sd(DATA_VALUE))
+
+data_summ <- data_summ %>%
+  left_join(depth_bins, by = c("DEPTH_BIN" = "bin"))
+
+pp2 <- ggplot(data_summ) +
+  geom_rect(aes(xmin = min_val, xmax = max_val, ymin = min_depth, ymax = max_depth), alpha = 0.5) +
+  scale_y_reverse()+
+  facet_wrap(~ BOX) +
+  labs(x = "Data Value", y = "Depth [m]") +
+  theme_minimal()+
+  coord_cartesian(ylim = c(200, 0))+
+  ggtitle(paste(param_name, 'profile ranges by box'))
+  
+print(pp2)
+
+
+
+
+all_data_summ[[i]] <- data_summ %>%
+  mutate(variable = param_name)
+
+
+}
+# export stats
+
+all_data_summ_df <- do.call(rbind, all_data_summ)
+
+write.csv(all_data_summ_df, file = paste0('AZMP_climatology_', Sys.Date(), '.csv'), row.names = FALSE)
+
+
+
+```
+
+
+Comparison to climatology ranges calculated in 2014
+
+```{r}
+
+# read in Gordana's data
+
+stage3_dat <- readMat('Gordana/B_stage3_Q_BIO_chl2.mat')
+test36 <- data.frame(stage3_dat$test36[[3]])
+
+data_24 <- read.csv('AZMP_climatology_2024-06-03.csv')
+#data_24 <- all_data_summ_df
+
+# match variable names
+dict_var <- data.frame(variable = unique(data_24$variable))
+dict_var$code <- c('amon', 'cphl', 'ntrz', 'ntri', 'doxy', 'phae', 'phos', 'psal', 'slca')
+
+full_df <- list()
+
+for (i in 1:nrow(dict_var)) {
+  codei <- dict_var$code[i]
+  row_ind <- grep(row.names(test36), pattern = codei)
+  if(length(row_ind) > 0) {
+    vardat14 <- test36[row_ind, ]
+    names(vardat14) <- c(1:9)
+    
+    var_df <- list()
+    for (box_num in 1:length(vardat14)){
+      box_df <- list()
+      for (ii in 1:length(vardat14[[box_num]])){
+        val_name <- names(vardat14[[box_num]])[ii]
+        mat <- vardat14[[box_num]][[val_name]]
+        # Add row and column names to your matrix
+        rownames(mat) <- seq(1:4)
+        colnames(mat) <- seq(1:12)
+
+        # Use melt to convert the matrix to a long dataframe
+        df <- reshape2::melt(mat) %>%
+            mutate(box = box_num)
+
+        # Rename the variables
+        names(df) <- c('depth_bin', 'month', val_name, 'box')
+        box_df[[ii]] <- df
+      }
+      box_df <- box_df %>% reduce(full_join, by=c('depth_bin', 'month', 'box'))
+      var_df[[box_num]] <- box_df
+    }
+    var_df <- bind_rows(var_df)
+    full_df[[i]] <- var_df 
+    names(full_df)[i] <- codei
+  } else{
+    cat('Skipped: No data found in 2014 climatology!')
+  }
+  
+}
+
+full_df <- list(full_df[[2]], full_df[[3]], full_df[[7]], full_df[[9]]) 
+# WARNING hard coded solution to remove NULL dataframe inside list
+allvardat <- full_df %>% reduce(full_join, by=c('depth_bin', 'month', 'box'))
+
+allvardat <- allvardat %>%
+  rename('cphl.mval' = 'cphl',
+         'ntrz.mval' = 'ntrz',
+         'phos.mval' = 'phos',
+         'slca.mval' = 'slca')
+
+alldatl <- allvardat %>%
+  pivot_longer(
+    cols = -c(month, depth_bin, box),  # columns to keep
+    names_to = c("variable", ".value"),  # new column names
+    names_pattern = "(.{4}).(min|max|no|std|mval)",  # pattern to split column names
+  )
+
+# plot boxplot comparison of ranges
+depth_bins <- data.frame(bin = c(1, 2, 3, 4), min_depth = c(0, 10, 30, 100), max_depth = c(10, 30, 100, 5000))
+alldatl <- alldatl %>%
+  left_join(depth_bins, by = c("depth_bin" = "bin"))%>%
+  filter(!is.na(variable))
+
+# save gordana's data  in csv
+write.csv(alldatl, file = 'Gordana/AZMP_climatology_stats_2014.csv', row.names = FALSE)
+
+
+for (i in 1:length(na.omit(unique(alldatl$variable)))) {
+  varname <- na.omit(unique(alldatl$variable))[i]
+  vardatl <- alldatl[alldatl$variable == varname, ] %>%
+    filter(!is.na(variable))
+pp14 <- ggplot(vardatl)+
+  geom_rect(aes(xmin = min, xmax = max, ymin = min_depth, ymax = max_depth), alpha = 0.5)+
+  scale_y_reverse()+
+  facet_wrap(~ box) +
+  labs(x = "Data Value", y = "Depth [m]") +
+  theme_minimal()+
+  coord_cartesian(ylim = c(200, 0))+
+  ggtitle(paste(varname, 'profile ranges by box [2014]'))
+print(pp14)
+  
+}
+  
+  
+
+```
+
+
+
+
+
+
+
