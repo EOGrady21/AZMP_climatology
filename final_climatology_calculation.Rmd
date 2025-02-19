@@ -14,7 +14,7 @@ had some data gaps which needed to be filled in with the 2014 climatology data.
 data14 <- read.csv('Gordana/AZMP_climatology_stats_2014.csv')
 
 # read in stats from 2024
-data24 <- read.csv('AZMP_climatology_2024-06-03.csv')
+data24 <- read.csv('data/final_climatology/2024_climatology/AZMP_climatology_2024-06-03.csv')
 
 ```
 
@@ -40,7 +40,7 @@ data_m <- data24 %>%
 
 ```{r write-data}
 # export data_m to csv
-write.csv(data_m, 'data/merged_climatology.csv', row.names = FALSE)
+write.csv(data_m, 'data/final_climatology/merged_climatology.csv', row.names = FALSE)
 
 ```
 
