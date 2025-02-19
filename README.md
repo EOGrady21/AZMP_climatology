@@ -94,8 +94,13 @@ of this project.
 
 ## Products available
 
-The ‘data’ folder contains multiple stages of data for each parameter. -
-initial data extraction - QC’d data - filtered data - climatology data
+The ‘data’ folder contains multiple stages of data for each parameter.
+
+- initial data extraction
+
+- QC (filtered) data
+
+- climatology statistics
 
 TS climatology data (CASTS) is also available, and other data extracted
 from NOAA for temperature and salinity.
