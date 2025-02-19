@@ -9,6 +9,10 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
+library(oce)
+library(ocedata)
+library(tidyverse)
+library(sf)
 ```
 
 # AZMP_climatology
@@ -26,6 +30,119 @@ generated in 2014 by Gordana Lazin, Andrew Cogswell, Catherine Johnson,
 Shelley Bond and Jeff Jackson (unpublished). This climatology makes some small 
 improvements in data quality and parameter coverage. It also updates the dataset
 to a more relevant time period. 
+
+# 2014 comparison
+
+There were multiple changes implemented in this updated version of the Scotian
+Shelf climatology, although most of the methods remained the same as they were
+in 2014. The main changes were:
+
+- A reduced temporal range
+        Data was only extracted from 1999-2023, as opposed to 1950-2013 in the 2014 version
+
+- Additional quality control
+        As recommended by the original authors in 2014, additional QC procedures
+        were implemented before climatology calculations were performed, including 
+        stage 2 testing from the IML QC protocol (range testing, comparitive 
+        measurements, constant profile, replicate variation, and others)
+
+- Improved data coverage
+        More parameters are included in this updated version. Phaeo, Ammonia, 
+        Nitrite, oxygen, were added to the list of parameters included in the
+        climatology.
+        
+
+
+# Data summary
+
+The data used in this project was extracted from BioChem, DFO's national database. 
+Data for relevant parameters was extracted for the Scotian Shelf region. The data
+was then put through a series of quality control steps to verify quality and remove
+outliers and questionable data. Data was then summarized in 9 geographic boxes, 
+over 4 depth intervals, for each month. 
+
+
+```{r load-data}
+# load data24
+
+varfiles <- list.files('data/filtered_data', pattern = 'final', full.names = TRUE)
+for (i in 1:length(varfiles)) {
+  # load all files and collate them into one dataframe
+  if (i == 1) {
+    data24 <- read.csv(varfiles[i])
+  } else {
+    data24 <- rbind(data24, read.csv(varfiles[i]))
+  }
+  
+}
+
+
+data(coastlineWorldFine)
+clwf <- as.data.frame(coastlineWorldFine@data)
+
+# read in boxes
+boxdat <- read.csv("Gordana/2014_boxes.csv")
+boxdat <- boxdat %>%
+  group_by(box)
+
+box_poly <- st_as_sf(boxdat, coords = c("longitude", "latitude"), crs = 4326)
+# Create polygon
+df_poly <- box_poly %>%
+  group_by(box) %>%
+  summarise(geometry = st_combine(geometry), do_union = FALSE) %>%
+  st_cast("POLYGON")
+
+```
+
+
+```{r spatial-distirbution}
+
+# plot spatial distribution of dataset
+
+
+
+# plot spatial distribution of data24 with coastline and climatology boxes
+
+ggplot()+
+  geom_path(data = clwf, aes(x = longitude, y = latitude), colour = 'black', fill = 'grey')+
+  geom_sf(data = df_poly, colour = 'black', alpha = 0.5)+
+  geom_point(data = data24, aes(x = HEADER_START_LON, y = HEADER_START_LAT), colour = 'darkblue', alpha = 0.1)+
+  ggtitle('Spatial distribution of data24')+
+  theme_classic()+
+  theme(legend.position = 'none') +
+  coord_sf(xlim = c(-71, -48), ylim = c(37, 48))
+
+
+
+```
+
+Figure 1. Spatial distribution of all data included in the climatology. Scotian 
+Shelf climatology boxes are shown in grey.
+
+
+```{r temporal-distribution}
+
+# plot temporal distribution of entire dataset
+
+yearMonth <- data24 %>%
+    mutate(., year = format(as.Date(data24$EVENT_START, '%d-%b-%y'), '%Y')) %>%
+    mutate(., month = format(as.Date(data24$EVENT_START, '%d-%b-%y'), '%b')) %>%
+    group_by(year, month) %>%
+    summarise(N = n())
+  
+ggplot(yearMonth, aes(year, month)) +
+    geom_tile(aes(fill = N), colour = "white") +
+    scale_fill_gradient(low = "blue", high = "red") +
+    labs(x = "Year", y = "Month", fill = "Number of \n Data Points") +
+    theme_minimal()+
+    ggtitle(paste("Temporal coverage"), subtitle = paste("Total points: ", sum(yearMonth$N)))+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+Figure 2. Temporal distribution of climatology data. Each tile represents the 
+number of data points collected in a given month. 
+
 
 ## Reports and scripts available
 
