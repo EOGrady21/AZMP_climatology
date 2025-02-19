@@ -62,7 +62,7 @@ outliers and questionable data. Data was then summarized in 9 geographic boxes,
 over 4 depth intervals, for each month. 
 
 
-```{r load-data}
+```{r load-data, echo=FALSE}
 # load data24
 
 varfiles <- list.files('data/filtered_data', pattern = 'final', full.names = TRUE)
@@ -95,7 +95,7 @@ df_poly <- box_poly %>%
 ```
 
 
-```{r spatial-distirbution}
+```{r spatial-distirbution, echo = FALSE, warning=FALSE, message = FALSE}
 
 # plot spatial distribution of dataset
 
@@ -120,7 +120,7 @@ Figure 1. Spatial distribution of all data included in the climatology. Scotian
 Shelf climatology boxes are shown in grey.
 
 
-```{r temporal-distribution}
+```{r temporal-distribution, echo = FALSE, warning=FALSE, message = FALSE}
 
 # plot temporal distribution of entire dataset
 
