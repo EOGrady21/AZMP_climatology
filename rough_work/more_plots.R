@@ -40,8 +40,10 @@ data_m <- read_csv('data/merged_climatology.csv')
 
 # plot time series of Ammonia mean values
 
+for (var in unique(data_m$variable)) {
+
 vardat <- data_m %>%
-  filter(variable == 'Ammonia')
+  filter(variable == var)
 
 vardat <- vardat %>%
   mutate(month_name = month.name[vardat$MONTH]) %>%
@@ -54,15 +56,16 @@ vardat$month_name <- forcats::fct_relevel(vardat$month_name, month.name)
 p <- ggplot()+
   geom_point(data = vardat, aes(x = month_name, y = mean_val), colour = 'red')+
   geom_line(data = vardat, aes(x = month_name, y = mean_val, group = 1), colour = 'red')+
-  ggtitle(paste('Timeseries of Ammonia'), subtitle = 'Scotian Shelf Climatology')+
+  ggtitle(paste('Timeseries of ', var), subtitle = 'Scotian Shelf Climatology')+
   theme_classic()+
   labs(x = 'Month', y = 'Mean Value')+
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.text = element_text(size = 15),
         title = element_text(size = 25))
 
-ggsave(paste0('plots/Ammonia/timeseries_ammonia.png'), p, height = 12, width = 14)
+ggsave(paste0('plots/Ammonia/timeseries_', var,'.png'), p, height = 12, width = 14)
 
+}
 
 # plot ammonia data profile by season for all boxes
 
