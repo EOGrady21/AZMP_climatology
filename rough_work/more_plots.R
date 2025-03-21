@@ -35,8 +35,40 @@
 
 library(tidyverse)
 
-data_m <- read_csv('data/merged_climatology.csv')
+data_m <- read_csv('data/final_climatology/merged_climatology.csv')
 
+depth_bin_labels <- c('0-10m', '10-30m', '30-100m', '100m-bottom')
+depth_bin_labels <- setNames(depth_bin_labels, c('1', '2', '3', '4'))
+# make timeseries plots for each variable, box and depth bin
+
+for (var in unique(data_m$variable)) {
+  
+  for(box in unique(data_m$BOX)) {
+    filtdat <- data_m %>%
+      filter(variable == var & BOX == box)
+    
+    # plot time series box plot and facet by depth bin
+    p <- ggplot(filtdat) +
+      geom_point(aes(x = MONTH, y = mval_m), size = 3, pch = 21, col = 'darkblue')+
+      geom_text(aes(label = n_m, x = MONTH, y = max_val_m), vjust = -.5, hjust = 1.5, colour = 'blue', size = 5)+
+      #geom_path(aes(x = MONTH, y = mval_m, group = DEPTH_BIN))+
+      geom_errorbar(aes(x = MONTH, ymin = min_val_m, ymax = max_val_m))+
+      facet_wrap(~DEPTH_BIN, ncol = 1, labeller = labeller(DEPTH_BIN = depth_bin_labels))+
+      scale_x_continuous(breaks = 1:12)+
+      # add facet labels
+      labs(title = paste('Timeseries of ', var, ' for box ', box),
+           x = 'Month', y = 'Value')+
+      theme_classic()+
+      theme(axis.text.x = element_text(angle = 45, hjust = 1),
+            axis.text = element_text(size = 15),
+            title = element_text(size = 25), 
+            strip.text = element_text(size = 15)
+            )+
+      scale_y_continuous(limits = c(0, 1.5*max(filtdat$max_val_m, na.rm = TRUE)))
+    ggsave(paste0('plots/box_timeseries_', var, '_box_', box, '.png'), p, height = 12, width = 14)
+
+  }
+}
 
 # plot time series of Ammonia mean values
 
