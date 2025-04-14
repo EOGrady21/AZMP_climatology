@@ -41,7 +41,7 @@ library(sf)
 data14 <- read.csv('Gordana/AZMP_climatology_stats_2014.csv')
 
 # read in stats from 2024
-data24 <- read.csv('AZMP_climatology_2024-06-03.csv')
+data24 <- read.csv('data/final_climatology/2024_climatology/AZMP_climatology_2024-06-03.csv')
 
 # read in boxes
 boxdat <- read.csv("Gordana/2014_boxes.csv")
@@ -125,6 +125,8 @@ for (i in 1:length(unique(data24$variable))) {
   
 }
 
+data14$no[data14$no == 0] <- NA
+
 for (i in 1:length(unique(data14$variable))) {
   var <- unique(data14$variable)[i]
   
@@ -147,7 +149,11 @@ data_m <- data24 %>%
                            'MONTH' = 'month',
                            'BOX' = 'box',
                            'DEPTH_BIN' = 'depth_bin')) %>%
-  mutate(source = ifelse(is.na(n), 'data14', 'data24')) %>%
+  mutate(source = case_when(
+    is.na(n) & !is.na(no) ~ 'data14',
+    !is.na(n) ~ 'data24',
+    is.na(n) & is.na(no) ~ 'NA'
+  )) %>%
   mutate(mval_m = ifelse(is.na(mval.x), mval.y, mval.x)) %>%
   mutate(n_m = ifelse(is.na(n), no, n)) %>%
   mutate(min_val_m = ifelse(is.na(min_val), min, min_val)) %>%
@@ -178,10 +184,10 @@ p <- ggplot()+
   # force integer values on y axis
   scale_y_continuous(breaks = seq(1, 10, 1))+
   ggtitle(paste( var))+
-  scale_fill_continuous('Number \n of points', low = 'grey', high = 'black')+
+  scale_fill_continuous('Number \n of points', low = 'grey', high = 'black', na.value = 'white')+
   scale_color_manual('Source',
-                     labels = c('data14' = '2014', 'data24' = '2024'),
-                     values = c('data14' = 'blue', 'data24' = 'red'))+
+                     labels = c('data14' = '2014', 'data24' = '2024', 'NA' = 'NA'),
+                     values = c('data14' = 'blue', 'data24' = 'red', 'NA' = 'white'))+
   labs(x = 'Month', y = 'Box')+
   theme(panel.background = element_rect(fill = 'white'),
         axis.text = element_text(size = 15),
@@ -193,7 +199,7 @@ ggsave(paste0('plots/merged_data_coverage_', var, '.png'), p, height = 12, width
 }
 
 # export data_m to csv
-write.csv(data_m, 'data/merged_climatology.csv', row.names = FALSE)
+write.csv(data_m, 'data/final_climatology/merged_climatology.csv', row.names = FALSE)
 
 
 # loop to plot each variable

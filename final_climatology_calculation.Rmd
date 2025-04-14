@@ -21,6 +21,8 @@ data24 <- read.csv('data/final_climatology/2024_climatology/AZMP_climatology_202
 
 
 ```{r merge-data}
+data14$no[data14$no == 0] <- NA
+
 data_m <- data24 %>%
   full_join(data14, by = c('variable',
                            'MONTH' = 'month',
